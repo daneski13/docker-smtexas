@@ -1,0 +1,45 @@
+# Example docker-compose file for running SMTexas with Mosquitto as the MQTT broker and PostgreSQL as the database.
+
+version: "3.8"
+
+services:
+  smt:
+    image: ghcr.io/daneski13/docker-smtexas:latest
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    environment:
+      SMT_USER: username
+      SMT_PASSWORD: supersecretpassword
+      # MQTT Configuration
+      SMT_MQTT_HOST: mosquitto
+      # Database Configuration
+      SMT_DB_URL: postgres://smtexas:supersecretpassword@postgres/smtexas
+    depends_on:
+      - mosquitto
+      - postgres
+
+  smt_mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883:1883"
+    volumes:
+      # See mosquitto docs for more info on configuration
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_log:/mosquitto/log
+  smt_postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: smtexas
+      POSTGRES_PASSWORD: supersecretpassword
+      POSTGRES_DB: smtexas
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  mosquitto_data:
+  mosquitto_log:
+  postgres_data:

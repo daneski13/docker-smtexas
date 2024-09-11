@@ -1,0 +1,60 @@
+name: Publish Docker Image to GHCR
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check tag format
+        id: check_tag
+        run: |
+          TAG=${GIT_REF#refs/tags/}
+          if [[ ! $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            exit 0
+          fi
+          echo "TAG=$TAG" >> $GITHUB_ENV
+
+      - name: Checkout code
+        if: env.TAG != ''
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        if: env.TAG != ''
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and Push Docker image
+        if: env.TAG != ''
+        run: |
+          MAJOR=${TAG%%.*}
+          MINOR=${TAG%.*}
+
+          echo "GITHUB_REF=${GITHUB_REF}"
+          echo "Building image with tag $TAG"
+
+          # Build and push the tagged image
+          docker build -t ghcr.io/daneski13/docker-smtexas:${TAG} .
+          docker push ghcr.io/daneski13/docker-smtexas:${TAG}
+
+          echo "Tagging and pushing additional tags"
+
+          # Tag and push the 'latest' image
+          docker tag ghcr.io/daneski13/docker-smtexas:${TAG} ghcr.io/daneski13/docker-smtexas:latest
+          docker push ghcr.io/daneski13/docker-smtexas:latest
+
+          # Tag and push the major version image
+          docker tag ghcr.io/daneski13/docker-smtexas:${TAG} ghcr.io/daneski13/docker-smtexas:${MAJOR}
+          docker push ghcr.io/daneski13/docker-smtexas:${MAJOR}
+
+          # Tag and push the minor version image
+          docker tag ghcr.io/daneski13/docker-smtexas:${TAG} ghcr.io/daneski13/docker-smtexas:${MAJOR}.${MINOR}
+          docker push ghcr.io/daneski13/docker-smtexas:${MAJOR}.${MINOR}

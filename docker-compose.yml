@@ -1,0 +1,21 @@
+version: "3.8"
+
+services:
+  smt:
+    image: ghcr.io/daneski13/docker-smtexas:latest
+    restart: unless-stopped
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+    enviroment:
+      SMT_USER: YOUR_USERNAME
+      SMT_PASSWORD: YOUR_PASSWORD
+      # SMT_LOG_LEVEL: INFO # Default is "INFO"
+
+      # MQTT Configuration
+      SMT_MQTT_HOST: YOUR_MQTT_HOST # Comment or remove this line out to disable MQTT
+      # SMT_MQTT_PORT: MQTT_BROKER_PORT # Default is 1883
+      # SMT_MQTT_TOPIC: MQTT_TOPIC # Default is "smt/meter"
+
+      # Database Configuration
+      SMT_DB_URL: YOUR_DB_URL # Comment or remove this line out to disable database
+      # SMT_DB_TABL: DB_TABLE_NAME # Default is "smt_meter"

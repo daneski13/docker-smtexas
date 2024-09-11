@@ -1,0 +1,9 @@
+requests
+git+https://github.com/daneski13/smart-meter-texas@main
+pyopenssl
+aiohttp
+pytz
+paho-mqtt>=2.0.0,<3.0.0
+SQLAlchemy>=2.0.0,<3.0.0
+psycopg2-binary # PostgreSQL
+pymysql # MySQL / MariaDB
