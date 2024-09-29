@@ -1,10 +1,11 @@
 import datetime
 import logging
 import os
-from sqlalchemy import event, DateTime, Numeric, create_engine, Column, Integer
+from sqlalchemy import event, DateTime, Numeric, create_engine, Column, Integer, String, func
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import paho.mqtt.client as mqtt
+import pandas as pd
 
 Base = declarative_base()
 
@@ -15,8 +16,10 @@ class Publisher:
     storing them in a database depending on the configuration.
     """
 
-    def __init__(self):
+    def __init__(self, interval_enabled: bool = False):
         self.logger = logging.getLogger()
+
+        self.interval_enabled = interval_enabled
 
         # MQTT settings
         self.mq_host = os.getenv('SMT_MQTT_HOST')
@@ -30,6 +33,8 @@ class Publisher:
         # DB settings
         self.db_url = os.getenv('SMT_DB_URL')
         self.db_table = os.getenv('SMT_DB_TABLE', 'smt_meter')
+        self.db_table_interval = os.getenv(
+            'SMT_DB_TABLE_INTERVAL', 'smt_interval')
 
         # Initialize MQTT and DB
         self.mq_client = self._set_mqtt()
@@ -49,7 +54,8 @@ class Publisher:
         # MQTT Publish
         if self.mq_client is not None:
             # JSON string to publish
-            json_str = f'{{"date": "{read_date.isoformat()}", "value": {read_value}}}'
+            json_str = f'{{"date": "{read_date.isoformat()}", "value": {
+                read_value}}}'
             # Publish to MQTT
             self.mq_client.publish(self.mq_topic, json_str)
         # Database save
@@ -62,6 +68,36 @@ class Publisher:
                 self.db_session.commit()
             else:
                 self.logger.error('Database table not initialized.')
+
+    def save_interval(self, interval_data: pd.DataFrame):
+        if not self.interval_enabled or self.db_session is None:
+            return
+        if not hasattr(self, '_interval_table'):
+            self.logger.error('Interval table not initialized.')
+            return
+        self.logger.info('Saving interval data...')
+
+        db_latest_interval = self.db_session.query(
+            func.max(self._interval_table.usage_start_time)).scalar()
+        # Check if there is new data to save
+        if db_latest_interval is not None:
+            # Get the latest interval from the df
+            df_latest_interval = interval_data['USAGE_START_TIME'].max()
+            if db_latest_interval >= df_latest_interval.tz_localize(None):
+                self.logger.info('No new interval data to save')
+                return
+
+        # Save the new interval data
+        for row in interval_data.itertuples():
+            interval_reading = self._interval_table(
+                usage_start_time=row.USAGE_START_TIME.tz_localize(None),
+                usage_end_time=row.USAGE_END_TIME.tz_localize(None),
+                usage_kwh=row.USAGE_KWH,
+                estimated_actual=row.ESTIMATED_ACTUAL,
+                consumption_surplusgeneration=row.CONSUMPTION_SURPLUSGENERATION
+            )
+            self.db_session.add(interval_reading)
+        self.db_session.commit()
 
     def _set_mqtt(self):
 
@@ -95,16 +131,30 @@ class Publisher:
             self.logger.info('Connected to database')
 
         def on_commit(session):
-            self.logger.info('Meter reading saved to database')
+            self.logger.info('Meter data saved to database')
 
         if self.db_url:
+            # Hourly read table
             class _MeterRead(Base):
                 __tablename__ = self.db_table
                 id = Column(Integer, primary_key=True)
                 date = Column(DateTime)
-                value = Column(Numeric)
+                value = Column(Numeric(10, 3))
 
             self._meter_table = _MeterRead
+
+            if self.interval_enabled:
+                # Interval table
+                class _IntervalRead(Base):
+                    __tablename__ = self.db_table_interval
+                    id = Column(Integer, primary_key=True)
+                    usage_start_time = Column(DateTime)
+                    usage_end_time = Column(DateTime)
+                    usage_kwh = Column(Numeric(6, 3))
+                    estimated_actual = Column(String(1))
+                    consumption_surplusgeneration = Column(String(18))
+
+                self._interval_table = _IntervalRead
 
             try:
                 engine = create_engine(self.db_url)

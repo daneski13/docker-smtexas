@@ -47,8 +47,20 @@ async def main():
         logger.error('Failed log in to SMT')
         logger.error(str(e))
         exit(1)
+
+    # See if interval data is enabled
+    interval_enabled = os.getenv('SMT_INTERVAL_ENABLED', False)
+    try:
+        interval_enabled = bool(interval_enabled)
+        if interval_enabled:
+            logger.info('Interval data collection enabled')
+    except ValueError:
+        interval_enabled = False
+        logger.warning(
+            'Invalid SMT_INTERVAL_ENABLED value, must be 0 or 1. Defaulting to 0 (disabled)')
+
     # Create the publisher
-    publisher = pb.Publisher()
+    publisher = pb.Publisher(interval_enabled)
 
     async def read_meter():
         try:
@@ -67,9 +79,19 @@ async def main():
         # Read on the hour
         if now.minute == 0:
             await read_meter()
+            # Every 2nd hour, grab 15 minute interval data
+            if interval_enabled and now.hour % 2 == 0:
+                try:
+                    df = await smt.read_interval(now)
+                    publisher.save_interval(df)
+                except Exception as e:
+                    logger.error('Failed to read interval data.')
+                    logger.debug(str(e))
             time.sleep(60)  # Sleep for a minute to avoid reading twice
         # Sleep until just before the next hour
         else:
+            # Sleep for a bit to stop the loop from running too fast, increasing CPU usage
+            time.sleep(0.1)
             next_hour = (now + timedelta(hours=1)).replace(minute=0,
                                                            second=0, microsecond=0)
             delta_seconds = (next_hour - now).total_seconds()

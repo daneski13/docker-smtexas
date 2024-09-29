@@ -1,23 +1,16 @@
-name: Publish Docker Image to Local Registry
-
+name: Publish Testing Images to Local Registry
 on:
   push:
     tags:
-      - "v*.*.*-beta" # Matches tags like v1.2.3-beta
-
+      - "v*.*.*-test" # Matches tags like v1.2.3-test
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Build and Push Docker image
         run: |
           # Build and push the image as latest
-          docker build -t hades.ski:5000/daneski13/docker-smtexas:latest-beta .
-          docker push hades.ski:5000/daneski13/docker-smtexas:latest-beta
-
-          docker tag hades.ski:5000/daneski13/docker-smtexas:latest-beta hcr.hades.ski/daneski13/docker-smtexas:latest-beta
-          docker push hcr.hades.ski/daneski13/docker-smtexas:latest-beta
+          docker build -t dcr.int.daneskalski.com/daneski13/docker-smtexas:latest-test .
+          docker push dcr.int.daneskalski.com/daneski13/docker-smtexas:latest-test
