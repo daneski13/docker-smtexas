@@ -33,6 +33,8 @@ jobs:
         run: |
           MAJOR=${TAG%%.*}
           MINOR=${TAG%.*}
+          echo "MAJOR=${MAJOR}"
+          echo "MINOR=${MINOR}"
 
           echo "GITHUB_REF=${GITHUB_REF}"
           echo "Building image with tag $TAG"
